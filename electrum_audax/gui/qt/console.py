@@ -11,7 +11,7 @@ from PyQt5 import QtGui
 from PyQt5 import QtWidgets
 
 from electrum_audax import util
-from electrum_audax.i18n import _
+from electrum_audaxi18n import _
 
 from .util import MONOSPACE_FONT
 
@@ -55,7 +55,7 @@ class Console(QtWidgets.QPlainTextEdit):
         self.setGeometry(50, 75, 600, 400)
         self.setWordWrapMode(QtGui.QTextOption.WrapAnywhere)
         self.setUndoRedoEnabled(False)
-        self.document().setDefaultFont(QtGui.QFont(MONOSPACE_FONT, 10, QtGui.QFont.Normal))
+        self.document().setDefaultFont(QtGui.QFont(MONOSPACE_FONT))
         self.showMessage(startup_message)
 
         self.updateNamespace({'run':self.run_script})

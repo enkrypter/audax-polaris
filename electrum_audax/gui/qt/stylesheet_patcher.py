@@ -14,9 +14,10 @@ def patch_qt_stylesheet(use_dark_theme: bool) -> None:
     style_sheet = app.styleSheet()
     style_sheet = style_sheet + '''
     /* PayToEdit text was being clipped */
+    /* Fixed in Lynx code/styles
     QAbstractScrollArea {
         padding: 0px;
-    }
+    }*/
     /* In History tab, labels while edited were being clipped (Windows) */
     QAbstractItemView QLineEdit {
         padding: 0px;

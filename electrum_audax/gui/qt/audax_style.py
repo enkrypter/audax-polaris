@@ -1,7 +1,7 @@
 """AUDAX look and feel."""
 
 import os
-from electrum_audax.util import pkg_dir
+from electrum_audaxutil import pkg_dir
 
 
 audax_stylesheet = """

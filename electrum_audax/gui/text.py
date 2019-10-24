@@ -7,15 +7,15 @@ from decimal import Decimal
 import getpass
 import logging
 
-import electrum_audax as electrum
-from electrum_audax.util import format_satoshis
-from electrum_audax.bitcoin import is_address, COIN, TYPE_ADDRESS
-from electrum_audax.transaction import TxOutput
-from electrum_audax.wallet import Wallet
-from electrum_audax.storage import WalletStorage
-from electrum_audax.network import NetworkParameters, TxBroadcastError, BestEffortRequestFailed
-from electrum_audax.interface import deserialize_server
-from electrum_audax.logging import console_stderr_handler
+import lynx
+from electrum_audaxutil import format_satoshis
+from electrum_audaxbitcoin import is_address, COIN, TYPE_ADDRESS
+from electrum_audaxtransaction import TxOutput
+from electrum_audaxwallet import Wallet
+from electrum_audaxstorage import WalletStorage
+from electrum_audaxnetwork import NetworkParameters, TxBroadcastError, BestEffortRequestFailed
+from electrum_audaxinterface import deserialize_server
+from electrum_audaxlogging import console_stderr_handler
 
 _ = lambda x:x  # i18n
 
@@ -28,7 +28,7 @@ class ElectrumGui:
         self.network = daemon.network
         storage = WalletStorage(config.get_wallet_path())
         if not storage.file_exists():
-            print("Wallet not found. try 'electrum-audax create'")
+            print("Wallet not found. try 'lynx create'")
             exit()
         if storage.is_encrypted():
             password = getpass.getpass('Password:', stream=None)
@@ -49,6 +49,12 @@ class ElectrumGui:
         curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_CYAN)
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE)
         self.stdscr.keypad(1)
+
+        if getattr(storage, 'backup_message', None):
+            msg_key = 'Press any key to continue...'
+            self.stdscr.addstr(f'{storage.backup_message}\n\n{msg_key}')
+            self.stdscr.getch()
+
         self.stdscr.border(0)
         self.maxy, self.maxx = self.stdscr.getmaxyx()
         self.set_cursor(0)
@@ -101,20 +107,20 @@ class ElectrumGui:
 
     def print_history(self):
 
-        width = [20, 40, 14, 14]
-        delta = (self.maxx - sum(width) - 4)/3
-        format_str = "%"+"%d"%width[0]+"s"+"%"+"%d"%(width[1]+delta)+"s"+"%"+"%d"%(width[2]+delta)+"s"+"%"+"%d"%(width[3]+delta)+"s"
-
         if self.history is None:
             self.update_history()
 
-        self.print_list(self.history[::-1], format_str%( _("Date"), _("Description"), _("Amount"), _("Balance")))
+        width = [20, 40, 14, 14]
+        delta = (self.maxx - sum(width) - 4) // 3
+        format_str = ("%" + "%d" % width[0] + "s" +
+                      "%" + "%d" % (width[1] + delta) + "s" +
+                      "%" + "%d" % (width[2] + delta) + "s" +
+                      "%" + "%d" % (width[3] + delta) + "s")
+        headers = (format_str % (_("Date"), _("Description"),
+                                 _("Amount"), _("Balance")))
+        self.print_list(self.history[::-1], headers)
 
     def update_history(self):
-        width = [20, 40, 14, 14]
-        delta = (self.maxx - sum(width) - 4)/3
-        format_str = "%"+"%d"%width[0]+"s"+"%"+"%d"%(width[1]+delta)+"s"+"%"+"%d"%(width[2]+delta)+"s"+"%"+"%d"%(width[3]+delta)+"s"
-
         b = 0
         self.history = []
         for tx_hash, tx_mined_status, value, balance in self.wallet.get_history():
@@ -130,7 +136,16 @@ class ElectrumGui:
             label = self.wallet.get_label(tx_hash)
             if len(label) > 40:
                 label = label[0:37] + '...'
-            self.history.append( format_str%( time_str, label, format_satoshis(value, whitespaces=True), format_satoshis(balance, whitespaces=True) ) )
+            width = [20, 40, 14, 14]
+            delta = (self.maxx - sum(width) - 4) // 3
+            format_str = ("%" + "%d" % width[0] + "s" +
+                          "%" + "%d" % (width[1] + delta) + "s" +
+                          "%" + "%d" % (width[2] + delta) + "s" +
+                          "%" + "%d" % (width[3] + delta) + "s")
+            msg = format_str % (time_str, label,
+                                format_satoshis(value, whitespaces=True),
+                                format_satoshis(balance, whitespaces=True))
+            self.history.append(msg)
 
 
     def print_balance(self):
@@ -339,7 +354,7 @@ class ElectrumGui:
 
     def do_send(self):
         if not is_address(self.str_recipient):
-            self.show_message(_('Invalid Audax address'))
+            self.show_message(_('Invalid AUDAX address'))
             return
         try:
             amount = int(Decimal(self.str_amount) * COIN)
@@ -416,7 +431,7 @@ class ElectrumGui:
                         self.show_message("Error:" + server + "\nIn doubt, type \"auto-connect\"")
                         return False
             if out.get('server') or out.get('proxy'):
-                proxy = electrum.network.deserialize_proxy(out.get('proxy')) if out.get('proxy') else proxy_config
+                proxy = lynx.network.deserialize_proxy(out.get('proxy')) if out.get('proxy') else proxy_config
                 net_params = NetworkParameters(host, port, protocol, proxy, auto_connect)
                 self.network.run_from_another_thread(self.network.set_parameters(net_params))
 

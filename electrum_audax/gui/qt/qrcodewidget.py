@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication, QVBoxLayout, QTextEdit, QHBoxLayout, QPushButton, QWidget)
 
 import electrum_audax
-from electrum_audax.i18n import _
+from electrum_audaxi18n import _
 from .util import WindowModalDialog
 
 
@@ -98,7 +98,7 @@ class QRDialog(WindowModalDialog):
         hbox = QHBoxLayout()
         hbox.addStretch(1)
 
-        config = electrum_audax.get_config()
+        config = lynx.get_config()
         if config:
             filename = os.path.join(config.path, "qrcode.png")
 

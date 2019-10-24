@@ -13,23 +13,24 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QProgressBar,
 from electrum_audax import version
 from electrum_audax import constants
 from electrum_audax import ecc
-from electrum_audax.i18n import _
-from electrum_audax.util import make_aiohttp_session
-from electrum_audax.logging import Logger
+from electrum_audaxi18n import _
+from electrum_audaxutil import make_aiohttp_session
+from electrum_audaxlogging import Logger
 
 
 class UpdateCheck(QWidget, Logger):
-    url = "https://electrum.org/version"
-    download_url = "https://electrum.org/#download"
+    url = "https://raw.githubusercontent.com/enkrypter/Lynx-wallet/master/.latest-version"
+    download_url = "https://github.com/enkrypter/Lynx-wallet/releases"
+
 
     VERSION_ANNOUNCEMENT_SIGNING_KEYS = (
-        "13xjmVAB1EATPP8RshTE8S8sNwwSUM9p1P",
+        "XuKFPN7RDbrvNsPddPyUPzVqwdhvfB67cx",
     )
 
     def __init__(self, main_window, latest_version=None):
         self.main_window = main_window
         QWidget.__init__(self)
-        self.setWindowTitle('Electrum - ' + _('Update Check'))
+        self.setWindowTitle('Lynx - ' + _('Update Check'))
         self.content = QVBoxLayout()
         self.content.setContentsMargins(*[10]*4)
 
@@ -87,10 +88,10 @@ class UpdateCheck(QWidget, Logger):
                 self.detail_label.setText(_("You can download the new version from {}.").format(url))
             else:
                 self.heading_label.setText('<h2>' + _("Already up to date") + '</h2>')
-                self.detail_label.setText(_("You are already on the latest version of Electrum."))
+                self.detail_label.setText(_("You are already on the latest version of Lynx."))
         else:
             self.heading_label.setText('<h2>' + _("Checking for updates...") + '</h2>')
-            self.detail_label.setText(_("Please wait while Electrum checks for available updates."))
+            self.detail_label.setText(_("Please wait while Lynx checks for available updates."))
 
 
 class UpdateCheckThread(QThread, Logger):

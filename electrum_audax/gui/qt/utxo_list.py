@@ -30,7 +30,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
 from PyQt5.QtWidgets import QAbstractItemView, QMenu
 
-from electrum_audax.i18n import _
+from electrum_audaxi18n import _
 
 from .util import MyTreeView, ColorScheme, MONOSPACE_FONT
 
@@ -82,9 +82,10 @@ class UTXOList(MyTreeView):
         labels = [name_short, address, label, amount, '%d'%height]
         utxo_item = [QStandardItem(x) for x in labels]
         self.set_editability(utxo_item)
-        utxo_item[self.Columns.ADDRESS].setFont(QFont(MONOSPACE_FONT))
-        utxo_item[self.Columns.AMOUNT].setFont(QFont(MONOSPACE_FONT))
-        utxo_item[self.Columns.OUTPOINT].setFont(QFont(MONOSPACE_FONT))
+        for i in range(5):
+            utxo_item[i].setFont(QFont(MONOSPACE_FONT))
+        utxo_item[self.Columns.AMOUNT].setTextAlignment(Qt.AlignRight)
+        utxo_item[self.Columns.HEIGHT].setTextAlignment(Qt.AlignRight)
         utxo_item[self.Columns.ADDRESS].setData(name, Qt.UserRole)
         if self.wallet.is_frozen_address(address):
             utxo_item[self.Columns.ADDRESS].setBackground(ColorScheme.BLUE.as_color(True))

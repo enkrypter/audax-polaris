@@ -27,12 +27,13 @@ import re
 from decimal import Decimal
 
 from PyQt5.QtGui import QFontMetrics
+from PyQt5.QtWidgets import QLineEdit
 
 from electrum_audax import bitcoin
-from electrum_audax.util import bfh
-from electrum_audax.transaction import TxOutput, push_script
-from electrum_audax.bitcoin import opcodes
-from electrum_audax.logging import Logger
+from electrum_audaxutil import bfh
+from electrum_audaxtransaction import TxOutput, push_script
+from electrum_audaxbitcoin import opcodes
+from electrum_audaxlogging import Logger
 
 from .qrtextedit import ScanQRTextEdit
 from .completion_text_edit import CompletionTextEdit
@@ -54,7 +55,8 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
         self.amount_edit = win.amount_e
         self.document().contentsChanged.connect(self.update_size)
         self.heightMin = 0
-        self.heightMax = 150
+        self.heightMax = 250
+        self.document().setDocumentMargin(0)
         self.c = None
         self.textChanged.connect(self.check_text)
         self.outputs = []
@@ -162,7 +164,7 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
             self.win.do_update_fee()
         else:
             self.amount_edit.setAmount(total if outputs else None)
-            self.win.lock_amount(total or len(lines) > 1)
+            self.win.lock_amount(total or len(lines)>1)
 
     def get_errors(self):
         return self.errors
@@ -193,16 +195,17 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
         self.update_size()
 
     def update_size(self):
-        lineHeight = QFontMetrics(self.document().defaultFont()).height()
         docHeight = self.document().size().height()
-        h = docHeight * lineHeight + 11
+        lineEditHeight = QLineEdit().sizeHint().height()
+        lineHeight = self.fontMetrics().height()
+        h = lineEditHeight + lineHeight * (docHeight - 1)
         h = min(max(h, self.heightMin), self.heightMax)
         self.setMinimumHeight(h)
         self.setMaximumHeight(h)
         self.verticalScrollBar().hide()
 
     def qr_input(self):
-        data = super(PayToEdit, self).qr_input()
+        data = super(PayToEdit,self).qr_input()
         if data.startswith("audax:"):
             self.scan_f(data)
             # TODO: update fee

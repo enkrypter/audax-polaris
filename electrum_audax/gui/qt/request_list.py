@@ -29,11 +29,11 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QMenu
 from PyQt5.QtCore import Qt
 
-from electrum_audax.i18n import _
-from electrum_audax.util import format_time, age
-from electrum_audax.plugin import run_hook
-from electrum_audax.paymentrequest import PR_UNKNOWN
-from electrum_audax.wallet import InternalAddressCorruption
+from electrum_audaxi18n import _
+from electrum_audaxutil import format_time, age
+from electrum_audaxplugin import run_hook
+from electrum_audaxpaymentrequest import PR_UNKNOWN
+from electrum_audaxwallet import InternalAddressCorruption
 
 from .util import MyTreeView, pr_tooltips, pr_icons, read_QIcon
 

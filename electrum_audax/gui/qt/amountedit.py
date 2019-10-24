@@ -3,11 +3,12 @@
 from decimal import Decimal
 
 from PyQt5.QtCore import pyqtSignal, Qt
-from PyQt5.QtGui import QPalette, QPainter
+from PyQt5.QtGui import QPalette, QPainter, QColor
 from PyQt5.QtWidgets import (QLineEdit, QStyle, QStyleOptionFrame)
 
-from electrum_audax.util import (format_satoshis_plain, decimal_point_to_base_unit_name,
+from electrum_audaxutil import (format_satoshis_plain, decimal_point_to_base_unit_name,
                                 FEERATE_PRECISION, quantize_feerate)
+from .util import ColorScheme
 
 
 class MyLineEdit(QLineEdit):
@@ -24,7 +25,7 @@ class AmountEdit(MyLineEdit):
     def __init__(self, base_unit, is_int=False, parent=None):
         QLineEdit.__init__(self, parent)
         # This seems sufficient for hundred-BTC amounts with 8 decimals
-        self.setFixedWidth(140)
+        self.setFixedWidth(180)
         self.base_unit = base_unit
         self.textChanged.connect(self.numbify)
         self.is_int = is_int
@@ -66,7 +67,7 @@ class AmountEdit(MyLineEdit):
             textRect = self.style().subElementRect(QStyle.SE_LineEditContents, panel, self)
             textRect.adjust(2, 0, -10, 0)
             painter = QPainter(self)
-            painter.setPen(self.help_palette.brush(QPalette.Disabled, QPalette.Text).color())
+            painter.setPen(QColor(ColorScheme.DEFAULT.as_color()))
             painter.drawText(textRect, Qt.AlignRight | Qt.AlignVCenter, self.base_unit())
 
     def get_amount(self):
@@ -117,11 +118,11 @@ class FeerateEdit(BTCAmountEdit):
         self.extra_precision = FEERATE_PRECISION
 
     def _base_unit(self):
-        return 'sat/byte'
+        return 'sats/kB'
 
     def get_amount(self):
-        sat_per_byte_amount = BTCAmountEdit.get_amount(self)
-        return quantize_feerate(sat_per_byte_amount)
+        sat_per_kb_amount = BTCAmountEdit.get_amount(self)
+        return quantize_feerate(sat_per_kb_amount)
 
     def setAmount(self, amount):
         amount = quantize_feerate(amount)

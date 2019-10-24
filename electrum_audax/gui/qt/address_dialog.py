@@ -23,7 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from electrum_audax.i18n import _
+from electrum_audaxi18n import _
 
 from PyQt5.QtWidgets import QVBoxLayout, QLabel
 
@@ -57,7 +57,7 @@ class AddressDialog(WindowModalDialog):
         vbox.addWidget(QLabel(_("Address:")))
         self.addr_e = ButtonsLineEdit(self.address)
         self.addr_e.addCopyButton(self.app)
-        icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
+        icon = "qrcode.png"
         self.addr_e.addButton(icon, self.show_qr, _("Show QR Code"))
         self.addr_e.setReadOnly(True)
         vbox.addWidget(self.addr_e)

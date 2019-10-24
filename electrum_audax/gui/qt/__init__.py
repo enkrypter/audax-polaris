@@ -42,18 +42,18 @@ from PyQt5.QtWidgets import (QApplication, QSystemTrayIcon, QWidget, QMenu,
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 import PyQt5.QtCore as QtCore
 
-from electrum_audax.i18n import _, set_language
-from electrum_audax.plugin import run_hook
-from electrum_audax.base_wizard import GoBack
-from electrum_audax.util import (UserCancelled, profiler,
+from electrum_audaxi18n import _, set_language
+from electrum_audaxplugin import run_hook
+from electrum_audaxbase_wizard import GoBack
+from electrum_audaxutil import (UserCancelled, profiler,
                                 WalletFileException, BitcoinException, get_new_wallet_name)
-from electrum_audax.wallet import Wallet, Abstract_Wallet
-from electrum_audax.logging import Logger
+from electrum_audaxwallet import Wallet, Abstract_Wallet
+from electrum_audaxlogging import Logger
 
 from .installwizard import InstallWizard, WalletAlreadyOpenInMemory
 
 
-from .util import get_default_language, read_QIcon, ColorScheme
+from .util import get_default_language, read_QIcon, ColorScheme, custom_message_box
 from .main_window import ElectrumWindow
 from .network_dialog import NetworkDialog
 from .stylesheet_patcher import patch_qt_stylesheet
@@ -94,7 +94,7 @@ class ElectrumGui(Logger):
         if hasattr(QtCore.Qt, "AA_ShareOpenGLContexts"):
             QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
         if hasattr(QGuiApplication, 'setDesktopFileName'):
-            QGuiApplication.setDesktopFileName('electrum-audax.desktop')
+            QGuiApplication.setDesktopFileName('lynx.desktop')
         self.gui_thread = threading.current_thread()
         self.config = config
         self.daemon = daemon
@@ -103,7 +103,7 @@ class ElectrumGui(Logger):
         self.efilter = OpenFileEventFilter(self.windows)
         self.app = QElectrumApplication(sys.argv)
         self.app.installEventFilter(self.efilter)
-        self.app.setWindowIcon(read_QIcon("electrum.png"))
+        self.app.setWindowIcon(read_QIcon("lynx.png"))
         # timer
         self.timer = QTimer(self.app)
         self.timer.setSingleShot(False)
@@ -116,7 +116,7 @@ class ElectrumGui(Logger):
         # init tray
         self.dark_icon = self.config.get("dark_icon", False)
         self.tray = QSystemTrayIcon(self.tray_icon(), None)
-        self.tray.setToolTip('Electrum-AUDAX')
+        self.tray.setToolTip('Lynx')
         self.tray.activated.connect(self.tray_activated)
         self.build_tray_menu()
         self.tray.show()
@@ -126,14 +126,13 @@ class ElectrumGui(Logger):
 
     def set_dark_theme_if_needed(self):
         use_dark_theme = self.config.get('qt_gui_color_theme', 'default') == 'dark'
-		self.app.setStyle('Fusion')
+        self.app.setStyle('Fusion')
         if use_dark_theme:
-            if use_dark_theme:
-				from .dark_audax_style import audax_stylesheet
-				self.app.setStyleSheet(audax_stylesheet)
-			else:
-				from .audax_style import audax_stylesheet
-				self.app.setStyleSheet(audax_stylesheet)
+            from .dark_audax_style import audax_stylesheet
+            self.app.setStyleSheet(audax_stylesheet)
+        else:
+            from .audax_style import audax_stylesheet
+            self.app.setStyleSheet(audax_stylesheet)
         # Apply any necessary stylesheet patches
         patch_qt_stylesheet(use_dark_theme=use_dark_theme)
         # Even if we ourselves don't set the dark theme,
@@ -155,7 +154,7 @@ class ElectrumGui(Logger):
             submenu.addAction(_("Close"), window.close)
         m.addAction(_("Dark/Light"), self.toggle_tray_icon)
         m.addSeparator()
-        m.addAction(_("Exit Electrum-AUDAX"), self.close)
+        m.addAction(_("Exit Lynx"), self.close)
 
     def tray_icon(self):
         if self.dark_icon:
@@ -187,7 +186,7 @@ class ElectrumGui(Logger):
 
     def show_network_dialog(self, parent):
         if not self.daemon.network:
-            parent.show_warning(_('You are using Electrum in offline mode; restart Electrum if you want to get connected'), title=_('Offline'))
+            parent.show_warning(_('You are using Lynx in offline mode; restart Lynx if you want to get connected'), title=_('Offline'))
             return
         if self.nd:
             self.nd.on_update()
@@ -228,13 +227,22 @@ class ElectrumGui(Logger):
             wallet = self.daemon.load_wallet(path, None)
         except BaseException as e:
             self.logger.exception('')
-            QMessageBox.warning(None, _('Error'),
-                                _('Cannot load wallet') + ' (1):\n' + str(e))
+            custom_message_box(icon=QMessageBox.Warning,
+                               parent=None,
+                               title=_('Error'),
+                               text=_('Cannot load wallet') + ' (1):\n' + str(e))
             # if app is starting, still let wizard to appear
             if not app_is_starting:
                 return
         if not wallet:
-            wallet = self._start_wizard_to_select_or_create_wallet(path)
+            try:
+                wallet = self._start_wizard_to_select_or_create_wallet(path)
+            except (WalletFileException, BitcoinException) as e:
+                self.logger.exception('')
+                custom_message_box(icon=QMessageBox.Warning,
+                                   parent=None,
+                                   title=_('Error'),
+                                   text=_('Cannot load wallet') + ' (2):\n' + str(e))
         if not wallet:
             return
         # create or raise window
@@ -246,8 +254,10 @@ class ElectrumGui(Logger):
                 window = self._create_window_for_wallet(wallet)
         except BaseException as e:
             self.logger.exception('')
-            QMessageBox.warning(None, _('Error'),
-                                _('Cannot create window for wallet') + ':\n' + str(e))
+            custom_message_box(icon=QMessageBox.Warning,
+                               parent=None,
+                               title=_('Error'),
+                               text=_('Cannot create window for wallet') + ':\n' + str(e))
             if app_is_starting:
                 wallet_dir = os.path.dirname(path)
                 path = os.path.join(wallet_dir, get_new_wallet_name(wallet_dir))
@@ -276,11 +286,6 @@ class ElectrumGui(Logger):
             return
         except WalletAlreadyOpenInMemory as e:
             return e.wallet
-        except (WalletFileException, BitcoinException) as e:
-            self.logger.exception('')
-            QMessageBox.warning(None, _('Error'),
-                                _('Cannot load wallet') + ' (2):\n' + str(e))
-            return
         finally:
             wizard.terminate()
         # return if wallet creation is not complete
@@ -291,7 +296,7 @@ class ElectrumGui(Logger):
         self.daemon.add_wallet(wallet)
         return wallet
 
-    def close_window(self, window):
+    def close_window(self, window: ElectrumWindow):
         if window in self.windows:
            self.windows.remove(window)
         self.build_tray_menu()

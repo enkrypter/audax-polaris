@@ -5,14 +5,12 @@ import sys
 import platform
 import queue
 import traceback
-import os
-import webbrowser
 
 from functools import partial, lru_cache
 from typing import NamedTuple, Callable, Optional, TYPE_CHECKING, Union, List, Dict
 
 from PyQt5.QtGui import (QFont, QColor, QCursor, QPixmap, QStandardItem,
-                         QPalette, QIcon, QFontMetrics)
+                         QPalette, QIcon)
 from PyQt5.QtCore import (Qt, QPersistentModelIndex, QModelIndex, pyqtSignal,
                           QCoreApplication, QItemSelectionModel, QThread,
                           QSortFilterProxyModel, QSize, QLocale)
@@ -22,18 +20,22 @@ from PyQt5.QtWidgets import (QPushButton, QLabel, QMessageBox, QHBoxLayout,
                              QFileDialog, QWidget, QToolButton, QTreeView, QPlainTextEdit,
                              QHeaderView, QApplication, QToolTip, QTreeWidget, QStyledItemDelegate)
 
-from electrum_audax.i18n import _, languages
-from electrum_audax.util import FileImportFailed, FileExportFailed, make_aiohttp_session, resource_path
-from electrum_audax.paymentrequest import PR_UNPAID, PR_PAID, PR_EXPIRED
+from electrum_audaxi18n import _, languages
+from electrum_audaxutil import (FileImportFailed, FileExportFailed,
+                           resource_path)
+from electrum_audaxpaymentrequest import PR_UNPAID, PR_PAID, PR_EXPIRED
 
 if TYPE_CHECKING:
     from .main_window import ElectrumWindow
 
 
 if platform.system() == 'Windows':
-    MONOSPACE_FONT = 'Lucida Console'
+    if platform.release() in ['7', '8', '10']:
+        MONOSPACE_FONT = 'Consolas'
+    else:
+        MONOSPACE_FONT = 'Lucida Console'
 elif platform.system() == 'Darwin':
-    MONOSPACE_FONT = 'Monaco'
+    MONOSPACE_FONT = 'Menlo'
 else:
     MONOSPACE_FONT = 'monospace'
 
@@ -57,9 +59,7 @@ expiration_values = [
     (_('1 day'), 24*60*60),
     (_('1 week'), 7*24*60*60),
     (_('Never'), None)
-    ]
-
-
+]
 
 
 class EnterButton(QPushButton):
@@ -95,7 +95,6 @@ class WWLabel(QLabel):
     def __init__ (self, text="", parent=None):
         QLabel.__init__(self, text, parent)
         self.setWordWrap(True)
-        self.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
 
 class HelpLabel(QLabel):
@@ -130,15 +129,14 @@ class HelpButton(QPushButton):
         QPushButton.__init__(self, '?')
         self.help_text = text
         self.setFocusPolicy(Qt.NoFocus)
-        self.setFixedWidth(round(2.2 * char_width_in_lineedit()))
+        self.setFixedWidth(20)
         self.clicked.connect(self.onclick)
 
     def onclick(self):
         custom_message_box(icon=QMessageBox.Information,
                            parent=self,
                            title=_('Help'),
-                           text=self.help_text,
-                           rich_text=True)
+                           text=self.help_text)
 
 
 class InfoButton(QPushButton):
@@ -146,15 +144,14 @@ class InfoButton(QPushButton):
         QPushButton.__init__(self, 'Info')
         self.help_text = text
         self.setFocusPolicy(Qt.NoFocus)
-        self.setFixedWidth(6 * char_width_in_lineedit())
+        self.setFixedWidth(60)
         self.clicked.connect(self.onclick)
 
     def onclick(self):
         custom_message_box(icon=QMessageBox.Information,
                            parent=self,
                            title=_('Info'),
-                           text=self.help_text,
-                           rich_text=True)
+                           text=self.help_text)
 
 
 class Buttons(QHBoxLayout):
@@ -210,15 +207,11 @@ class MessageBoxMixin(object):
     def top_level_window(self, test_func=None):
         return self.top_level_window_recurse(test_func)
 
-    def question(self, msg, parent=None, title=None, icon=None, **kwargs) -> bool:
+    def question(self, msg, parent=None, title=None, icon=None):
         Yes, No = QMessageBox.Yes, QMessageBox.No
-        return Yes == self.msg_box(icon=icon or QMessageBox.Question,
-                                   parent=parent,
-                                   title=title or '',
-                                   text=msg,
-                                   buttons=Yes|No,
-                                   defaultButton=No,
-                                   **kwargs)
+        return self.msg_box(icon or QMessageBox.Question,
+                            parent, title or '',
+                            msg, buttons=Yes|No, defaultButton=No) == Yes
 
     def show_warning(self, msg, parent=None, title=None, **kwargs):
         return self.msg_box(QMessageBox.Warning, parent,
@@ -262,11 +255,7 @@ def custom_message_box(*, icon, parent, title, text, buttons=QMessageBox.Ok,
     d.setDefaultButton(defaultButton)
     if rich_text:
         d.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
-        # set AutoText instead of RichText
-        # AutoText lets Qt figure out whether to render as rich text.
-        # e.g. if text is actually plain text and uses "\n" newlines;
-        #      and we set RichText here, newlines would be swallowed
-        d.setTextFormat(Qt.AutoText)
+        d.setTextFormat(Qt.RichText)
     else:
         d.setTextInteractionFlags(Qt.TextSelectableByMouse)
         d.setTextFormat(Qt.PlainText)
@@ -293,9 +282,8 @@ class WaitingDialog(WindowModalDialog):
         if isinstance(parent, MessageBoxMixin):
             parent = parent.top_level_window()
         WindowModalDialog.__init__(self, parent, _("Please wait"))
-        self.message_label = QLabel(message)
         vbox = QVBoxLayout(self)
-        vbox.addWidget(self.message_label)
+        vbox.addWidget(QLabel(message))
         self.accepted.connect(self.on_accepted)
         self.show()
         self.thread = TaskThread(self)
@@ -307,10 +295,6 @@ class WaitingDialog(WindowModalDialog):
 
     def on_accepted(self):
         self.thread.stop()
-
-    def update(self, msg):
-        print(msg)
-        self.message_label.setText(msg)
 
 
 def line_dialog(parent, title, label, ok_label, default=None):
@@ -469,8 +453,7 @@ class ElectrumItemDelegate(QStyledItemDelegate):
 
 class MyTreeView(QTreeView):
 
-    def __init__(self, parent: 'ElectrumWindow', create_menu, *,
-                 stretch_column=None, editable_columns=None):
+    def __init__(self, parent: 'ElectrumWindow', create_menu, stretch_column=None, editable_columns=None):
         super().__init__(parent)
         self.parent = parent
         self.config = self.parent.config
@@ -480,12 +463,10 @@ class MyTreeView(QTreeView):
         self.setUniformRowHeights(True)
 
         # Control which columns are editable
-        if editable_columns is not None:
-            editable_columns = set(editable_columns)
-        elif stretch_column is not None:
+        if editable_columns is None:
             editable_columns = {stretch_column}
         else:
-            editable_columns = {}
+            editable_columns = set(editable_columns)
         self.editable_columns = editable_columns
         self.setItemDelegate(ElectrumItemDelegate(self))
         self.current_filter = ""
@@ -529,6 +510,7 @@ class MyTreeView(QTreeView):
         model = self.model()
         model.setHorizontalHeaderLabels(col_names)
         self.header().setStretchLastSection(False)
+        self.header().setDefaultAlignment(Qt.AlignCenter)
         for col_idx in headers:
             sm = QHeaderView.Stretch if col_idx == self.stretch_column else QHeaderView.ResizeToContents
             self.header().setSectionResizeMode(col_idx, sm)
@@ -655,7 +637,8 @@ class ButtonsWidget(QWidget):
     def addButton(self, icon_name, on_click, tooltip):
         button = QToolButton(self)
         button.setIcon(read_QIcon(icon_name))
-        button.setIconSize(QSize(25,25))
+        iconSize = QLineEdit().sizeHint().height() - 7  # 3px (button sz - icon sz), 2px borders, 2px padding
+        button.setIconSize(QSize(iconSize, iconSize))
         button.setCursor(QCursor(Qt.PointingHandCursor))
         button.setStyleSheet("QToolButton { border: none; hover {border: 1px} pressed {border: 1px} padding: 0px; }")
         button.setVisible(True)
@@ -765,7 +748,7 @@ class ColorScheme:
     RED = ColorSchemeItem("#7c1111", "#f18c8c")
     BLUE = ColorSchemeItem("#123b7c", "#8cb3f2")
     PURPLE = ColorSchemeItem("#8A2BE2", "#8A2BE2")
-    DEFAULT = ColorSchemeItem("black", "white")
+    DEFAULT = ColorSchemeItem("#818181", "white")
 
     @staticmethod
     def has_dark_background(widget):
@@ -828,7 +811,7 @@ def import_meta_gui(electrum_window, title, importer, on_success):
 def export_meta_gui(electrum_window, title, exporter):
     filter_ = "JSON (*.json);;All files (*)"
     filename = electrum_window.getSaveFileName(_("Select file to save your {}").format(title),
-                                               'electrum-audax_{}.json'.format(title), filter_)
+                                               'electrum_{}.json'.format(title), filter_)
     if not filename:
         return
     try:
@@ -881,25 +864,6 @@ class FromList(QTreeWidget):
         sm = QHeaderView.ResizeToContents
         self.header().setSectionResizeMode(0, sm)
         self.header().setSectionResizeMode(1, sm)
-
-
-def char_width_in_lineedit() -> int:
-    char_width = QFontMetrics(QLineEdit().font()).averageCharWidth()
-    # 'averageCharWidth' seems to underestimate on Windows, hence 'max()'
-    return max(9, char_width)
-
-
-def webopen(url: str):
-    if sys.platform == 'linux' and os.environ.get('APPIMAGE'):
-        # When on Linux webbrowser.open can fail in AppImage because it can't find the correct libdbus.
-        # We just fork the process and unset LD_LIBRARY_PATH before opening the URL.
-        # See #5425
-        if os.fork() == 0:
-            del os.environ['LD_LIBRARY_PATH']
-            webbrowser.open(url)
-            sys.exit(0)
-    else:
-        webbrowser.open(url)
 
 
 if __name__ == "__main__":

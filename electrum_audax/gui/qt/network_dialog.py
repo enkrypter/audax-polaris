@@ -32,11 +32,11 @@ from PyQt5.QtWidgets import (QTreeWidget, QTreeWidgetItem, QMenu, QGridLayout, Q
                              QLineEdit, QDialog, QVBoxLayout, QHeaderView, QCheckBox,
                              QTabWidget, QWidget, QLabel)
 
-from electrum_audax.i18n import _
+from electrum_audaxi18n import _
 from electrum_audax import constants, blockchain
-from electrum_audax.interface import serialize_server, deserialize_server
-from electrum_audax.network import Network
-from electrum_audax.logging import get_logger
+from electrum_audaxinterface import serialize_server, deserialize_server
+from electrum_audaxnetwork import Network
+from electrum_audaxlogging import get_logger
 
 from .util import Buttons, CloseButton, HelpButton, read_QIcon
 
@@ -230,8 +230,8 @@ class NetworkChoiceLayout(object):
         self.autoconnect_cb.clicked.connect(self.update)
 
         msg = ' '.join([
-            _("If auto-connect is enabled, Electrum will always use a server that is on the longest blockchain."),
-            _("If it is disabled, you have to choose a server you want to use. Electrum will warn you if your server is lagging.")
+            _("If auto-connect is enabled, Lynx will always use a server that is on the longest blockchain."),
+            _("If it is disabled, you have to choose a server you want to use. Lynx will warn you if your server is lagging.")
         ])
         grid.addWidget(self.autoconnect_cb, 0, 0, 1, 3)
         grid.addWidget(HelpButton(msg), 0, 4)
@@ -284,20 +284,27 @@ class NetworkChoiceLayout(object):
         self.tor_cb.hide()
         self.tor_cb.clicked.connect(self.use_tor_proxy)
 
+        self.tor_auto_on = QCheckBox(_("Use Tor Proxy on startup"))
+        self.tor_auto_on.setIcon(read_QIcon("tor_logo.png"))
+        self.tor_auto_on.setChecked(self.config.get('tor_auto_on', False))
+        self.tor_auto_on.clicked.connect(self.use_tor_auto_on)
+
         grid.addWidget(self.tor_cb, 1, 0, 1, 3)
         grid.addWidget(self.proxy_cb, 2, 0, 1, 3)
-        grid.addWidget(HelpButton(_('Proxy settings apply to all connections: with Electrum servers, but also with third-party services.')), 2, 4)
+        grid.addWidget(HelpButton(_('Proxy settings apply to all connections: with Lynx servers, but also with third-party services.')), 2, 4)
         grid.addWidget(self.proxy_mode, 4, 1)
         grid.addWidget(self.proxy_host, 4, 2)
         grid.addWidget(self.proxy_port, 4, 3)
         grid.addWidget(self.proxy_user, 5, 2)
         grid.addWidget(self.proxy_password, 5, 3)
+        grid.addWidget(self.tor_auto_on, 6, 0, 1, 3)
+        grid.addWidget(HelpButton(_('During wallet startup try to detect and use Tor Proxy.')), 6, 4)
         grid.setRowStretch(7, 1)
 
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
         msg =  ' '.join([
-            _("Electrum connects to several nodes in order to download block headers and find out the longest blockchain."),
+            _("Lynx connects to several nodes in order to download block headers and find out the longest blockchain."),
             _("This blockchain is used to verify the transactions sent by your transaction server.")
         ])
         self.status_label = QLabel('')
@@ -306,7 +313,7 @@ class NetworkChoiceLayout(object):
         grid.addWidget(HelpButton(msg), 0, 4)
 
         self.server_label = QLabel('')
-        msg = _("Electrum sends your wallet addresses to a single server, in order to receive your transaction history.")
+        msg = _("Lynx sends your wallet addresses to a single server, in order to receive your transaction history.")
         grid.addWidget(QLabel(_('Server') + ':'), 1, 0)
         grid.addWidget(self.server_label, 1, 1, 1, 3)
         grid.addWidget(HelpButton(msg), 1, 4)
@@ -508,6 +515,9 @@ class NetworkChoiceLayout(object):
 
     def proxy_settings_changed(self):
         self.tor_cb.setChecked(False)
+
+    def use_tor_auto_on(self, use_it):
+        self.config.set_key('tor_auto_on', use_it, True)
 
 
 class TorDetector(QThread):

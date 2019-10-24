@@ -36,13 +36,13 @@ from PyQt5.QtWidgets import (QDialog, QLabel, QPushButton, QHBoxLayout, QVBoxLay
 import qrcode
 from qrcode import exceptions
 
-from electrum_audax.bitcoin import base_encode
-from electrum_audax.i18n import _
-from electrum_audax.plugin import run_hook
+from electrum_audaxbitcoin import base_encode
+from electrum_audaxi18n import _
+from electrum_audaxplugin import run_hook
 from electrum_audax import simple_config
-from electrum_audax.util import bfh
-from electrum_audax.transaction import SerializationError, Transaction
-from electrum_audax.logging import get_logger
+from electrum_audaxutil import bfh
+from electrum_audaxtransaction import SerializationError, Transaction
+from electrum_audaxlogging import get_logger
 
 from .util import (MessageBoxMixin, read_QIcon, Buttons, CopyButton,
                    MONOSPACE_FONT, ColorScheme, ButtonsLineEdit)
@@ -61,7 +61,7 @@ def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
         d = TxDialog(tx, parent, desc, prompt_if_unsaved)
     except SerializationError as e:
         _logger.exception('unable to deserialize the transaction')
-        parent.show_critical(_("Electrum was unable to deserialize the transaction:") + "\n" + str(e))
+        parent.show_critical(_("Lynx was unable to deserialize the transaction:") + "\n" + str(e))
     else:
         dialogs.append(d)
         d.show()
@@ -103,7 +103,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         vbox.addWidget(QLabel(_("Transaction ID:")))
         self.tx_hash_e  = ButtonsLineEdit()
         qr_show = lambda: parent.show_qrcode(str(self.tx_hash_e.text()), 'Transaction ID', parent=self)
-        qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
+        qr_icon = "qrcode.png"
         self.tx_hash_e.addButton(qr_icon, qr_show, _("Show as QR code"))
         self.tx_hash_e.setReadOnly(True)
         vbox.addWidget(self.tx_hash_e)
@@ -253,7 +253,6 @@ class TxDialog(QDialog, MessageBoxMixin):
         else:
             self.date_label.hide()
         self.locktime_label.setText(f"LockTime: {self.tx.locktime}")
-        self.rbf_label.setText(f"RBF: {not self.tx.is_final()}")
         if tx_mined_status.header_hash:
             self.block_hash_label.setText(_("Included in block: {}")
                                           .format(tx_mined_status.header_hash))
@@ -290,15 +289,10 @@ class TxDialog(QDialog, MessageBoxMixin):
         chg = QTextCharFormat()
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(background=True)))
         chg.setToolTip(_("Wallet change address"))
-        twofactor = QTextCharFormat()
-        twofactor.setBackground(QBrush(ColorScheme.BLUE.as_color(background=True)))
-        twofactor.setToolTip(_("TrustedCoin (2FA) fee for the next batch of transactions"))
 
         def text_format(addr):
             if self.wallet.is_mine(addr):
                 return chg if self.wallet.is_change(addr) else rec
-            elif self.wallet.is_billing_address(addr):
-                return twofactor
             return ext
 
         def format_amount(amt):
@@ -367,8 +361,6 @@ class TxDialog(QDialog, MessageBoxMixin):
         vbox_right = QVBoxLayout()
         self.size_label = TxDetailLabel()
         vbox_right.addWidget(self.size_label)
-        self.rbf_label = TxDetailLabel()
-        vbox_right.addWidget(self.rbf_label)
         self.locktime_label = TxDetailLabel()
         vbox_right.addWidget(self.locktime_label)
         self.block_hash_label = TxDetailLabel(word_wrap=True)

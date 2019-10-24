@@ -39,30 +39,29 @@ from PyQt5.QtWidgets import (QMenu, QHeaderView, QLabel, QMessageBox,
                              QPushButton, QComboBox, QVBoxLayout, QCalendarWidget,
                              QGridLayout)
 
-from electrum_audax.address_synchronizer import TX_HEIGHT_LOCAL
-from electrum_audax.i18n import _
-from electrum_audax.util import (block_explorer_URL, profiler, TxMinedInfo,
+from electrum_audaxaddress_synchronizer import TX_HEIGHT_LOCAL
+from electrum_audaxi18n import _
+from electrum_audaxutil import (block_explorer_URL, profiler, TxMinedInfo,
                                 OrderedDictWithIndex, timestamp_to_datetime)
-from electrum_audax.logging import get_logger, Logger
+from electrum_audaxlogging import get_logger, Logger
 
 from .util import (read_QIcon, MONOSPACE_FONT, Buttons, CancelButton, OkButton,
                    filename_field, MyTreeView, AcceptFileDragDrop, WindowModalDialog,
                    CloseButton)
 
 if TYPE_CHECKING:
-    from electrum_audax.wallet import Abstract_Wallet
+    from electrum_audaxwallet import Abstract_Wallet
 
 
 _logger = get_logger(__name__)
 
 
 try:
-    from electrum_audax.plot import plot_history, NothingToPlotException
+    from electrum_audaxplot import plot_history, NothingToPlotException
 except:
-    _logger.info("could not import electrum_audax.plot. This feature needs matplotlib to be installed.")
+    _logger.info("could not import lynx.plot. This feature needs matplotlib to be installed.")
     plot_history = None
 
-# note: this list needs to be kept in sync with another in kivy
 TX_ICONS = [
     "unconfirmed.png",
     "warning.png",
@@ -79,13 +78,14 @@ TX_ICONS = [
 class HistoryColumns(IntEnum):
     STATUS_ICON = 0
     STATUS_TEXT = 1
-    DESCRIPTION = 2
-    COIN_VALUE = 3
-    RUNNING_COIN_BALANCE = 4
-    FIAT_VALUE = 5
-    FIAT_ACQ_PRICE = 6
-    FIAT_CAP_GAINS = 7
-    TXID = 8
+    BLANK = 2
+    DESCRIPTION = 3
+    COIN_VALUE = 4
+    RUNNING_COIN_BALANCE = 5
+    FIAT_VALUE = 6
+    FIAT_ACQ_PRICE = 7
+    FIAT_CAP_GAINS = 8
+    TXID = 9
 
 class HistorySortModel(QSortFilterProxyModel):
     def lessThan(self, source_left: QModelIndex, source_right: QModelIndex):
@@ -151,6 +151,7 @@ class HistoryModel(QAbstractItemModel, Logger):
                     # txpos breaks ties for verified same block txns
                     (status, conf, -height, -txpos),
                 HistoryColumns.STATUS_TEXT: status_str,
+                HistoryColumns.BLANK: '',
                 HistoryColumns.DESCRIPTION: tx_item['label'],
                 HistoryColumns.COIN_VALUE:  tx_item['value'].value,
                 HistoryColumns.RUNNING_COIN_BALANCE: tx_item['balance'].value,
@@ -168,14 +169,17 @@ class HistoryModel(QAbstractItemModel, Logger):
                 return QVariant(read_QIcon(TX_ICONS[status]))
             elif col == HistoryColumns.STATUS_ICON and role == Qt.ToolTipRole:
                 return QVariant(str(conf) + _(" confirmation" + ("s" if conf != 1 else "")))
-            elif col > HistoryColumns.DESCRIPTION and role == Qt.TextAlignmentRole:
+            elif col != HistoryColumns.DESCRIPTION and role == Qt.TextAlignmentRole:
                 return QVariant(Qt.AlignRight | Qt.AlignVCenter)
-            elif col != HistoryColumns.STATUS_TEXT and role == Qt.FontRole:
+            elif col != HistoryColumns.DESCRIPTION and role == Qt.FontRole:
                 monospace_font = QFont(MONOSPACE_FONT)
                 return QVariant(monospace_font)
             elif col == HistoryColumns.DESCRIPTION and role == Qt.DecorationRole \
                     and self.parent.wallet.invoices.paid.get(tx_hash):
                 return QVariant(read_QIcon("seal"))
+            elif col == HistoryColumns.BLANK and role == Qt.ForegroundRole:
+                BLANK_brush = QBrush(QColor("#1c75bc"))
+                return QVariant(BLANK_brush)
             elif col in (HistoryColumns.DESCRIPTION, HistoryColumns.COIN_VALUE) \
                     and role == Qt.ForegroundRole and tx_item['value'].value < 0:
                 red_brush = QBrush(QColor("#BC1E1E"))
@@ -187,6 +191,8 @@ class HistoryModel(QAbstractItemModel, Logger):
             return QVariant()
         if col == HistoryColumns.STATUS_TEXT:
             return QVariant(status_str)
+        elif col == HistoryColumns.BLANK:
+            return QVariant('')
         elif col == HistoryColumns.DESCRIPTION:
             return QVariant(tx_item['label'])
         elif col == HistoryColumns.COIN_VALUE:
@@ -283,6 +289,7 @@ class HistoryModel(QAbstractItemModel, Logger):
         set_visible(HistoryColumns.FIAT_VALUE, history)
         set_visible(HistoryColumns.FIAT_ACQ_PRICE, history and cap_gains)
         set_visible(HistoryColumns.FIAT_CAP_GAINS, history and cap_gains)
+        set_visible(HistoryColumns.BLANK, False)
 
     def update_fiat(self, row, idx):
         tx_item = self.transactions.value_from_pos(row)
@@ -333,6 +340,7 @@ class HistoryModel(QAbstractItemModel, Logger):
         return {
             HistoryColumns.STATUS_ICON: '',
             HistoryColumns.STATUS_TEXT: _('Date'),
+            HistoryColumns.BLANK: _(''),
             HistoryColumns.DESCRIPTION: _('Description'),
             HistoryColumns.COIN_VALUE: _('Amount'),
             HistoryColumns.RUNNING_COIN_BALANCE: _('Balance'),
@@ -357,6 +365,7 @@ class HistoryModel(QAbstractItemModel, Logger):
 
 class HistoryList(MyTreeView, AcceptFileDragDrop):
     filter_columns = [HistoryColumns.STATUS_TEXT,
+                      HistoryColumns.BLANK,
                       HistoryColumns.DESCRIPTION,
                       HistoryColumns.COIN_VALUE,
                       HistoryColumns.TXID]
@@ -596,15 +605,6 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
             persistent = QPersistentModelIndex(org_idx.sibling(org_idx.row(), c))
             menu.addAction(_("Edit {}").format(label), lambda p=persistent: self.edit(QModelIndex(p)))
         menu.addAction(_("Details"), lambda: self.show_transaction(tx_hash))
-        if is_unconfirmed and tx:
-            # note: the current implementation of RBF *needs* the old tx fee
-            rbf = is_mine and not tx.is_final() and fee is not None
-            if rbf:
-                menu.addAction(_("Increase fee"), lambda: self.parent.bump_fee_dialog(tx))
-            else:
-                child_tx = self.wallet.cpfp(tx, 0)
-                if child_tx:
-                    menu.addAction(_("Child pays for parent"), lambda: self.parent.cpfp(tx, child_tx))
         if pr_key:
             menu.addAction(read_QIcon("seal"), _("View invoice"), lambda: self.parent.show_invoice(pr_key))
         if tx_URL:
@@ -618,8 +618,8 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         if len(to_delete) > 1:
             question = (_("Are you sure you want to remove this transaction and {} child transactions?")
                         .format(len(to_delete) - 1))
-        answer = QMessageBox.question(self.parent, _("Please confirm"), question, QMessageBox.Yes, QMessageBox.No)
-        if answer == QMessageBox.No:
+        if not self.parent.question(msg=question,
+                                    title=_("Please confirm")):
             return
         for tx in to_delete:
             self.wallet.remove_transaction(tx)
@@ -639,7 +639,7 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         d = WindowModalDialog(self, _('Export History'))
         d.setMinimumSize(400, 200)
         vbox = QVBoxLayout(d)
-        defaultname = os.path.expanduser('~/electrum-audax-history.csv')
+        defaultname = os.path.expanduser('~/lynx-history.csv')
         select_msg = _('Select file to export your wallet transactions to')
         hbox, filename_e, csv_button = filename_field(self, self.config, defaultname, select_msg)
         vbox.addLayout(hbox)
@@ -656,7 +656,7 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         try:
             self.do_export_history(filename, csv_button.isChecked())
         except (IOError, os.error) as reason:
-            export_error_label = _("Electrum was unable to produce a transaction export.")
+            export_error_label = _("Lynx was unable to produce a transaction export.")
             self.parent.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export history"))
             return
         self.parent.show_message(_("Your wallet history has been successfully exported."))
@@ -694,7 +694,7 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                 for line in lines:
                     transaction.writerow(line)
             else:
-                from electrum_audax.util import json_encode
+                from electrum_audaxutil import json_encode
                 f.write(json_encode(txns))
 
     def text_txid_from_coordinate(self, row, col):
